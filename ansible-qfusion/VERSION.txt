@@ -1,0 +1,35 @@
+QFusion Ansible Project
+========================
+
+版本: 1.0.4
+打包时间: 2026-04-08 17:46:07
+打包脚本: package_ansible_qfusion.sh
+系统信息: Linux claude 4.19.90-89.11.v2401.ky10.x86_64 #1 SMP Tue May 7 18:33:01 CST 2024 x86_64 x86_64 x86_64 GNU/Linux
+
+文件清单:
+./ANSIBLE_CAPABILITY_ANALYSIS.md
+./ansible_capability_summary.txt
+./ansible.cfg
+./ANSIBLE_LIMITATIONS.md
+./ansible-playbook-wrapper.sh
+./CHANGELOG.md
+./checks_list_summary.txt
+./group_vars/all.yml
+./INSTALL.md
+./inventory/hosts.yml
+./MIGRATION_GUIDE.md
+./playbooks/check_only.yml
+./playbooks/fix_and_check.yml
+./playbooks/remote_init.yml
+./PROJECT_SUMMARY.md
+./QUICK_REFERENCE.md
+./QUICK_START.md
+./README.md
+./README_ROLE.md
+./roles/qfusion_check/handlers/main.yml
+./roles/qfusion_check/tasks/fix.yml
+./roles/qfusion_check/tasks/main.yml
+./roles/qfusion_check/vars/main.yml
+./SUPPORTED_CHECKS.md
+./TEST_SUMMARY_1.0.2.md
+./VERSION.txt

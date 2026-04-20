@@ -1,0 +1,142 @@
+---
+# QFusion 全局变量配置
+# 基于 qfusion_package/qfusion.sh 重构
+
+# 操作系统相关
+supported_os_versions:
+  redhat: ["7.8", "7.9"]
+  centos: ["7.x"]
+  kylin: ["V10 SP3"]
+
+# 最小内核版本要求
+min_kernel_version: "4.19"
+
+# YUM源配置
+yum_repos_path: "/etc/yum.repos.d/"
+local_yum_repo_enabled: false
+
+# 网络配置
+network:
+  # 最小网卡速率（Mbps）
+  min_nic_speed: 1000
+
+  # DNS服务器列表
+  dns_servers:
+    - "114.114.114.114"
+    - "8.8.8.8"
+
+  # 是否禁用IPv6
+  disable_ipv6: false
+
+  # 是否停止iptables
+  stop_iptables: false
+
+# 硬件配置
+hardware:
+  # 硬件时间同步
+  sync_hwclock: true
+
+  # 交换分区
+  swap_enabled: false
+
+  # I/O调度算法
+  io_scheduler: "deadline"
+
+# 系统配置
+system:
+  # SELinux状态: enforcing, permissive, disabled
+  selinux_state: "disabled"
+
+  # Auditd状态
+  auditd_enabled: false
+
+  # /tmp目录权限
+  tmp_dir_perms: "1777"
+
+  # virbr0网卡
+  disable_virbr0: true
+
+  # 用户资源限制
+  ulimits:
+    - domain: "*"
+      type: soft
+      item: nofile
+      value: 65536
+    - domain: "*"
+      type: hard
+      item: nofile
+      value: 65536
+    - domain: "*"
+      type: soft
+      item: nproc
+      value: 4096
+    - domain: "*"
+      type: hard
+      item: nproc
+      value: 8192
+
+# Kubernetes相关
+kubernetes:
+  # 检查并移除冲突软件
+  remove_conflicting_packages: true
+  conflicting_packages:
+    - "docker"
+    - "docker-engine"
+    - "docker.io"
+    - "containerd"
+    - "runc"
+
+# 必需软件包（基础系统包）
+required_packages:
+  - "bash"
+  - "openssh-server"
+  - "openssh-clients"
+  - "net-tools"
+  - "lsof"
+  - "vim"
+  - "wget"
+  - "curl"
+  - "rsync"
+
+# Oracle数据库依赖包
+oracle_required_packages:
+  - "bc"
+  - "binutils"
+  - "elfutils-libelf"
+  - "elfutils-libelf-devel"
+  - "fontconfig-devel"
+  - "glibc"
+  - "glibc-devel"
+  - "ksh"
+  - "libaio"
+  - "libaio-devel"
+  - "libXrender"
+  - "libXrender-devel"
+  - "libX11"
+  - "libXau"
+  - "libXi"
+  - "libXtst"
+  - "libgcc"
+  - "libstdc++"
+  - "libstdc++-devel"
+  - "libxcb"
+  - "make"
+  - "policycoreutils"
+  - "smartmontools"
+  - "sysstat"
+
+# kdump配置
+kdump:
+  enabled: false
+  crashkernel: "4096M,high"
+
+# 麒麟系统特有配置
+kylin:
+  # bpf_jit_limit (麒麟ARM)
+  bpf_jit_limit: 264241152
+
+# 检查模式（check_only 或 fix_and_check）
+check_mode: false
+
+# 报告目录
+report_dir: "/tmp/qfusion_ansible_reports"

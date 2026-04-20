@@ -1,0 +1,78 @@
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.30.30.101
+Warning: Permanently added '172.30.30.101' (ED25519) to the list of known hosts.
+
+Authorized users only. All activities may be monitored and reported.
+root@172.30.30.101's password: 
+echo '=== 网络连通性检查 ==='
+ping -c 1 -W 2 114.114.114.114 2>&1 || echo '外网不通'
+echo '=== YUM源配置文件 ==='
+ls -lh /etc/yum.repos.d/ 2>&1
+echo '=== 本地ISO挂载状态 ==='
+mount | grep -E 'cdrom|iso' || echo '未挂载ISO'
+echo '=== YUM缓存测试 (15秒超时) ==='
+timeout 15 yum makecache 2>&1 || echo 'YUM makecache失败'
+echo '=== YUM仓库列表 ==='
+yum repolist 2>&1
+exit
+[1;31m########################################################################################################################################################[0m
+[1;31m#                                                                                                                                                      #[0m
+[1;31m# 尊敬的用户您好，为确保一体机稳定运行，切勿在一体机层面安装第三方软件或直接修改一体机相关配置参数!                                                    #[0m
+[1;31m# 如有疑问可请先在售后技术支持群先联系我们确认，谢谢！                                                                                                 #[0m
+[1;31m#                                                                                                                                                      #[0m
+[1;31m# QFusion高危操作:                                                                                                                                     #[0m
+[1;31m#                                                                                                                                                      #[0m
+[1;31m# 1、对以下网络组件变更的metallb、cilium、kube-proxy                                                                                                   #[0m
+[1;31m# 2、对qfusion-instanller配置文件或组件变更                                                                                                            #[0m
+[1;31m# 3、进行以下核心组件操作kubelet、docker、containerd                                                                                                   #[0m
+[1;31m# 4、删除pv和pvc动作一般不做，如果要做需要产品介入一起                                                                                                 #[0m
+[1;31m# 5、修改节点网卡配置重启网络后需要对cilium、metallb、access-control组件进行重启                                                                       #[0m
+[1;31m# 6、后续重做备库,建议客户在业务低峰期做全备后重做。跟进问题收尾，避免单主情况出现。                                                                   #[0m
+[1;31m# 7、sysctl -p加载/etc/sysctl.conf参数至内核的操作后续禁用。如需操作需严格核对/etc/sysctl.conf参数配置带来的影响。                                     #[0m
+[1;31m#                                                                                                                                                      #[0m
+[1;31m########################################################################################################################################################[0m
+Last login: Fri Mar  6 14:58:42 2026 from 10.10.156.54
+echo '=== 网络连通性检查 ==='
+ping -c 1 -W 2 114.114.114.114 2>&1 || echo '外网不通'
+echo '=== YUM源配置文件 ==='
+ls -lh /etc/yum.repos.d/ 2>&1
+echo '=== 本地ISO挂载状态 ==='
+mount | grep -E 'cdrom|iso' || echo '未挂载ISO'
+echo '=== YUM缓存测试 (15秒超时) ==='
+timeout 15 yum makecache 2>&1 || echo 'YUM makecache失败'
+echo '=== YUM仓库列表 ==='
+yum repolist 2>&1
+exit
+[root@172-30-30-101 ~]# echo '=== 网络连通性检查 ==='
+=== 网络连通性检查 ===
+[root@172-30-30-101 ~]# ping -c 1 -W 2 114.114.114.114 2>&1 || echo '外网不通'
+PING 114.114.114.114 (114.114.114.114) 56(84) bytes of data.
+
+--- 114.114.114.114 ping statistics ---
+1 packets transmitted, 0 received, 100% packet loss, time 0ms
+
+外网不通
+[root@172-30-30-101 ~]# echo '=== YUM源配置文件 ==='
+=== YUM源配置文件 ===
+[root@172-30-30-101 ~]# ls -lh /etc/yum.repos.d/ 2>&1
+total 4.0K
+drwxr-xr-x 2 root root  30 Nov 26 15:54 [0m[01;34mbp[0m
+-rw-r--r-- 1 root root 716 Apr 12  2024 kylin_x86_64.repo
+[root@172-30-30-101 ~]# echo '=== 本地ISO挂载状态 ==='
+=== 本地ISO挂载状态 ===
+[root@172-30-30-101 ~]# mount | grep -E 'cdrom|iso' || echo '未挂载ISO'
+未挂载ISO
+[root@172-30-30-101 ~]# echo '=== YUM缓存测试 (15秒超时) ==='
+=== YUM缓存测试 (15秒超时) ===
+[root@172-30-30-101 ~]# timeout 15 yum makecache 2>&1 || echo 'YUM makecache失败'
+Kylin Linux Advanced     [===                 ] ---  B/s |   0  B     --:-- ETAKylin Linux Advanced Server 10 - Os              14 kB/s | 3.7 kB     00:00    
+Kylin Linux Advanced     [===                 ] ---  B/s |   0  B     --:-- ETAKylin Linux Advanced     [   ===              ] ---  B/s |   0  B     --:-- ETAKylin Linux Advanced     [      ===           ] ---  B/s |   0  B     --:-- ETAKylin Linux Advanced Server 10 - Updates        4.1 kB/s | 3.0 kB     00:00    
+Metadata cache created.
+[root@172-30-30-101 ~]# echo '=== YUM仓库列表 ==='
+=== YUM仓库列表 ===
+[root@172-30-30-101 ~]# yum repolist 2>&1
+repo id                     repo name
+ks10-adv-os                 Kylin Linux Advanced Server 10 - Os
+ks10-adv-updates            Kylin Linux Advanced Server 10 - Updates
+[root@172-30-30-101 ~]# exit
+logout
+Connection to 172.30.30.101 closed.

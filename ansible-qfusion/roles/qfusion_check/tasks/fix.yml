@@ -1,0 +1,302 @@
+---
+# QFusion 修复任务（仅在fix_and_check模式下执行）
+
+# ================== YUM源修复 ==================
+- name: 检查并修复YUM源
+  when: yum_repo_count.stdout|int == 0
+  block:
+    - name: 备份现有YUM源配置
+      shell: tar -czf /etc/yum.repos.d/backup_$(date +%Y%m%d_%H%M%S).tar.gz /etc/yum.repos.d/*.repo 2>/dev/null || true
+
+    - name: 检测系统类型并配置YUM源
+      include_tasks: "{{ role_path }}/tasks/yum_repo_{{ os_type }}.yml"
+      when: os_type in ['redhat', 'centos']
+
+# ================== 硬件时间同步修复 ==================
+- name: 修复硬件时间同步
+  when: hwclock_path.rc != 0
+  block:
+    - name: 安装util-linux包
+      package:
+        name: util-linux
+        state: present
+
+    - name: 同步硬件时间到系统时间
+      command: hwclock --hctosys
+      when: not ansible_check_mode
+
+# ================== DNS配���修复 ==================
+- name: 修复DNS配置
+  when: "'none' in dns_servers.stdout"
+  block:
+    - name: 备份/etc/resolv.conf
+      copy:
+        src: /etc/resolv.conf
+        dest: /etc/resolv.conf.backup
+        remote_src: yes
+      failed_when: false
+
+    - name: 配置DNS服务器
+      blockinfile:
+        path: /etc/resolv.conf
+        marker: "# {mark} Ansible managed DNS configuration"
+        block: |
+          {% for dns in network.dns_servers %}
+          nameserver {{ dns }}
+          {% endfor %}
+      when: not ansible_check_mode
+
+# ================== Swap分区修复 ==================
+- name: 修复Swap分区（禁用）
+  when: swap_enabled_count.stdout|int > 0 and not system.swap_enabled
+  block:
+    - name: 禁用所有swap
+      command: swapoff -a
+      when: not ansible_check_mode
+
+    - name: 注释fstab中的swap条目
+      replace:
+        path: /etc/fstab
+        regexp: '^(.*swap.*)$'
+        replace: '#\1'
+      when: not ansible_check_mode
+
+# ================== SELinux修复 ==================
+- name: 修复SELinux配置
+  when: not selinux_ok | default(false)
+  block:
+    - name: 备份SELinux配置文件
+      copy:
+        src: /etc/selinux/config
+        dest: /etc/selinux/config.backup
+        remote_src: yes
+      when: not ansible_check_mode
+      failed_when: false
+
+    - name: 设置SELinux运行状态
+      selinux:
+        state: "{{ system.selinux_state }}"
+        policy: targeted
+      when: not ansible_check_mode
+
+    - name: 修改SELinux配置文件
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: 'SELINUX={{ system.selinux_state }}'
+      when: not ansible_check_mode
+
+    - name: 标记SELinux已修改
+      set_fact:
+        selinux_changed: true
+
+    - name: 显示SELinux修改警告
+      debug:
+        msg: "⚠️ SELinux配置已修改，{{ '需要重启系统才能生效' if selinux_config_ok == false else '系统将在下次重启时生效' }}"
+
+# ================== I/O调度算法修复 ==================
+- name: 修复I/O调度算法
+  when: hardware.io_scheduler not in io_schedulers.stdout
+  block:
+    - name: 设置I/O调度算法
+      blockinfile:
+        path: /etc/rc.local
+        create: yes
+        mode: '0755'
+        marker: "# {mark} Ansible managed I/O scheduler"
+        block: |
+          {% for dev in ansible_devices.keys() %}
+          echo {{ hardware.io_scheduler }} > /sys/block/{{ dev }}/queue/scheduler
+          {% endfor %}
+      when: not ansible_check_mode
+
+# ================== Auditd修复 ==================
+- name: 修复Auditd服务
+  when: system.auditd_enabled != auditd_status.status.ActiveState == 'active'
+  block:
+    - name: {{ '启动' if system.auditd_enabled else '停止' }}Auditd服务
+      systemd:
+        name: auditd
+        state: "{{ 'started' if system.auditd_enabled else 'stopped' }}"
+        enabled: "{{ 'yes' if system.auditd_enabled else 'no' }}"
+      when: not ansible_check_mode
+
+# ================== /tmp目录权限修复 ==================
+- name: 修复/tmp目录权限
+  when: not tmp_perms_ok
+  block:
+    - name: 设置/tmp目录权限
+      file:
+        path: /tmp
+        mode: "{{ system.tmp_dir_perms }}"
+      when: not ansible_check_mode
+
+# ================== virbr0网卡修复 ==================
+- name: 修复virbr0网卡
+  when: virbr0_status.stdout == 'exists' and system.disable_virbr0
+  block:
+    - name: 停止libvirtd服务
+      systemd:
+        name: libvirtd
+        state: stopped
+        enabled: no
+      when: not ansible_check_mode
+      failed_when: false
+
+    - name: 删除virbr0网卡
+      command: virsh net-destroy default
+      when: not ansible_check_mode
+      failed_when: false
+
+# ================== 用户资源限制修复 ==================
+- name: 修复用户资源限制
+  when: ulimit_nofile.stdout|int < 65536
+  block:
+    - name: 配置limits.conf
+      blockinfile:
+        path: /etc/security/limits.conf
+        marker: "# {mark} Ansible managed limits"
+        block: |
+          {% for limit in system.ulimits %}
+          {{ limit.domain }}  {{ limit.type }}  {{ limit.item }}  {{ limit.value }}
+          {% endfor %}
+      when: not ansible_check_mode
+
+# ================== IPv6修复 ==================
+- name: 修复IPv6配置
+  when: network.disable_ipv6 and ipv6_disabled.stdout != '1'
+  block:
+    - name: 禁用IPv6
+      sysctl:
+        name: "{{ item }}"
+        value: "1"
+        sysctl_set: yes
+        state: present
+        reload: yes
+      loop:
+        - net.ipv6.conf.all.disable_ipv6
+        - net.ipv6.conf.default.disable_ipv6
+      when: not ansible_check_mode
+      notify: 重载sysctl配置
+
+# ================== iptables修复 ==================
+- name: 修复iptables配置
+  when: network.stop_iptables
+  block:
+    - name: 停止iptables服务
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - iptables
+        - ip6tables
+      when: not ansible_check_mode
+      failed_when: false
+
+# ================== kdump修复 ==================
+- name: 修复kdump配置
+  when: kdump.enabled != (kdump_status.status.ActiveState == 'active')
+  block:
+    - name: {{ '启动' if kdump.enabled else '停止' }}kdump服务
+      systemd:
+        name: kdump
+        state: "{{ 'started' if kdump.enabled else 'stopped' }}"
+        enabled: "{{ 'yes' if kdump.enabled else 'no' }}"
+      when: not ansible_check_mode
+
+# ================== crashkernel修复 ==================
+- name: 修复crashkernel配置
+  when: crashkernel_config.stdout == 'not_found' and kdump.enabled
+  block:
+    - name: 检查grub配置文件
+      stat:
+        path: /etc/default/grub
+      register: grub_config
+
+    - name: 添加crashkernel参数
+      lineinfile:
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX=.*'
+        line: 'GRUB_CMDLINE_LINUX="crashkernel={{ kdump.crashkernel }}"'
+        backrefs: yes
+      when:
+        - grub_config.stat.exists
+        - not ansible_check_mode
+
+    - name: 标记grub已修改
+      set_fact:
+        grub_changed: true
+
+# ================== 安装Oracle依赖包 ==================
+- name: 安装Oracle数据库依赖包
+  when: missing_oracle_packages_list is defined and missing_oracle_packages_list|length > 0
+  block:
+    - name: 显示即将安装的Oracle包
+      debug:
+        msg: "即将安装 {{ missing_oracle_packages_list|length }} 个Oracle依赖包: {{ missing_oracle_packages_list|join(', ') }}"
+
+    - name: 检查YUM源是否可用
+      command: yum repolist 2>/dev/null
+      register: yum_repolist
+      changed_when: false
+      failed_when: false
+
+    - name: 提示YUM源状态
+      debug:
+        msg: "⚠️ YUM源{{ '可用' if yum_repolist.rc == 0 else '不可用，请先配置YUM源' }}"
+
+    - name: 尝试安装Oracle依赖包（逐个安装，部分失败不影响其他）
+      package:
+        name: "{{ item }}"
+        state: present
+      when:
+        - not ansible_check_mode
+        - yum_repolist.rc == 0
+      loop: "{{ missing_oracle_packages_list }}"
+      register: oracle_install_result
+      failed_when: false
+
+    - name: 统计安装结果
+      set_fact:
+        oracle_install_success: "{{ oracle_install_result.results | selectattr('failed', 'equalto', false) | list }}"
+        oracle_install_failed: "{{ oracle_install_result.results | selectattr('failed', 'equalto', true) | list }}"
+
+    - name: 显示安装结果摘要
+      debug:
+        msg:
+          - "✅ 成功安装: {{ oracle_install_success | length }} 个包"
+          - "❌ 安装失败: {{ oracle_install_failed | length }} 个包"
+          - "{{ '失败的包: ' ~ oracle_install_failed | map(attribute='item') | join(', ') if oracle_install_failed | length > 0 else '' }}"
+
+    - name: 提示手动安装失败的包
+      debug:
+        msg: "⚠️ 以下包安装失败，请手动检查: {{ oracle_install_failed | map(attribute='item') | join(', ') }}"
+      when: oracle_install_failed | length > 0
+
+# ================== 麒麟ARM bpf_jit修复 ==================
+- name: 修复麒麟系统bpf_jit
+  when:
+    - is_kylin_os
+    - is_arm_arch
+    - bpf_jit_limit.stdout|int < kylin.bpf_jit_limit
+  block:
+    - name: 设置bpf_jit_limit
+      sysctl:
+        name: net.core.bpf_jit_limit
+        value: "{{ kylin.bpf_jit_limit }}"
+        sysctl_set: yes
+        state: present
+        reload: yes
+      when: not ansible_check_mode
+      notify: 重载sysctl配置
+
+    - name: 启用bpf_jit
+      sysctl:
+        name: net.core.bpf_jit_enable
+        value: "1"
+        sysctl_set: yes
+        state: present
+        reload: yes
+      when: not ansible_check_mode
+      notify: 重载sysctl配置

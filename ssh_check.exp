@@ -1,0 +1,17 @@
+#!/usr/bin/expect -f
+set timeout 30
+set password "Cljslrl0620!"
+
+spawn ssh -o StrictHostKeyChecking=no root@10.10.156.87 "ls -lh /root/ansible-qfusion.tar.gz"
+
+expect {
+    "password:" {
+        send "$password\r"
+    }
+    timeout {
+        puts "连接超时"
+        exit 1
+    }
+}
+
+expect eof

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pandoc --track-changes=all \"浙江大学RDS安全加固方案\\(1\\).docx\" -o /tmp/security_plan.md)",
+      "Read(//tmp/**)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(unzip -q \"浙江大学RDS安全加固方案\\(1\\).docx\" -d /tmp/docx_unpacked/)"
+    ]
+  }
+}

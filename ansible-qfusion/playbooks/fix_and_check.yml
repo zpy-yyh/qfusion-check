@@ -1,0 +1,97 @@
+---
+# QFusion 检查并修复playbook
+# 对应原脚本: qfusion.sh --remote-init（部分功能）
+#
+# 功能: 执行检查项，并自动修复不符合要求的配置
+# 使用: ansible-playbook -i inventory/hosts.yml playbooks/fix_and_check.yml
+#
+# 注意: 此playbook会修改系统配置，请先在测试环境验证
+
+- name: QFusion 环境检查并修复
+  hosts: qfusion_cluster
+  become: yes
+  gather_facts: yes
+
+  vars_files:
+    - ../group_vars/all.yml
+
+  vars:
+    # 强制修复模式
+    force_fix: false
+
+  pre_tasks:
+    - name: 显示修复模式警告
+      debug:
+        msg: |
+          ==================================================
+          ⚠️  警告: 检查并修复模式
+          ==================================================
+          此playbook将修改系统配置以符合QFusion要求
+          修改包括但不限于:
+            - SELinux状态
+            - Swap分区
+            - DNS配置
+            - 系统参数(sysctl)
+            - 用户资源限制
+          ==================================================
+          目标主机: {{ inventory_hostname }}
+          ==================================================
+      tags: ['always']
+
+    - name: 确认继续（可选）
+      pause:
+        prompt: "按回车键继续，或按Ctrl+C取消"
+      when: not force_fix and inventory_hostname == ansible_play_hosts_all[0]
+      tags: ['always']
+
+  roles:
+    - role: qfusion_check
+      tags: ['check']
+
+    - role: qfusion_check
+      tasks_from: fix.yml
+      tags: ['fix']
+
+  post_tasks:
+    - name: 显示修复完成信息
+      debug:
+        msg: |
+          ==================================================
+          ✅ {{ inventory_hostname }} 修复完成
+          ==================================================
+          检查报告: {{ report_dir }}/{{ inventory_hostname }}_check_report.txt
+          ==================================================
+      delegate_to: localhost
+
+    - name: 检查是否需要重启
+      set_fact:
+        need_reboot: "{{ selinux_changed | default(false) or grub_changed | default(false) }}"
+
+    - name: 显示重启提示
+      debug:
+        msg: |
+          ==================================================
+          ⚠️  需要重启以应用某些更改
+          ==================================================
+          主机: {{ inventory_hostname }}
+          原因:
+            - SELinux配置已修改
+            - 或者 grub配置已修改
+          ==================================================
+      when: need_reboot
+      delegate_to: localhost
+
+    - name: 汇总所有节点的修复结果
+      shell: cat {{ report_dir }}/{{ item }}_check_report.txt 2>/dev/null || echo "报告不存在"
+      register: all_reports
+      loop: "{{ ansible_play_batch }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: 显示汇总信息
+      debug:
+        msg: "{{ item.stdout }}"
+      loop: "{{ all_reports.results }}"
+      delegate_to: localhost
+      run_once: true
+      when: item.stdout is defined

@@ -1,0 +1,41 @@
+# QFusion 3master+3node 集群节点配置示例
+# 请根据实际情况修改以下配置
+
+# ============================================
+# Master节点（3台）
+# ============================================
+# 格式: IP 主机名 角色 用户 认证信息
+# 示例1: 使用密码
+192.168.1.10 qfusion-master-1 master root password123
+192.168.1.11 qfusion-master-2 master root password456
+192.168.1.12 qfusion-master-3 master root password789
+
+# 示例2: 使用SSH密钥
+# 192.168.1.10 qfusion-master-1 master root /root/.ssh/id_rsa
+# 192.168.1.11 qfusion-master-2 master root /root/.ssh/id_rsa
+# 192.168.1.12 qfusion-master-3 master root /root/.ssh/id_rsa
+
+# ============================================
+# Worker节点（3台）
+# ============================================
+# 格式: IP 主机名 角色 用户 认证信息
+192.168.1.13 qfusion-worker-1 worker root password123
+192.168.1.14 qfusion-worker-2 worker root password456
+192.168.1.15 qfusion-worker-3 worker root password789
+
+# 示例2: 使用SSH密钥
+# 192.168.1.13 qfusion-worker-1 worker root /root/.ssh/id_rsa
+# 192.168.1.14 qfusion-worker-2 worker root /root/.ssh/id_rsa
+# 192.168.1.15 qfusion-worker-3 worker root /root/.ssh/id_rsa
+
+# ============================================
+# 注意事项
+# ============================================
+# 1. IP地址: 请替换为实际的IP地址
+# 2. 主机名: 请替换为实际的主机名
+# 3. 用户名: 通常是root，也可以是其他有sudo权限的用户
+# 4. 认证信息:
+#    - 密码: 直接填写密码（明文，注意安全）
+#    - 密钥: 填写私钥文件路径，如 /root/.ssh/id_rsa
+# 5. 角色只能是: master 或 worker
+# 6. 以 # 开头的行为注释，会被忽略

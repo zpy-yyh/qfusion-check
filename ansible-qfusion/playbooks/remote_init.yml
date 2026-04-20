@@ -1,0 +1,191 @@
+---
+# QFusion 远程初始化playbook
+# 对应原脚本: qfusion.sh --remote-init
+#
+# 功能: 完整的远程初始化流程，包括RAID配置等
+# 使用: ansible-playbook -i inventory/hosts.yml playbooks/remote_init.yml
+#
+# 注意: 此playbook会进行深度系统配置，包括RAID配置
+
+- name: QFusion 远程初始化
+  hosts: qfusion_cluster
+  become: yes
+  gather_facts: yes
+
+  vars_files:
+    - ../group_vars/all.yml
+
+  vars:
+    # 初始化步骤
+    init_steps:
+      - name: 环境检查
+        playbook: check_only.yml
+      - name: 系统修复
+        playbook: fix_and_check.yml
+      - name: RAID配置
+        playbook: raid_config.yml
+      - name: 安装前准备
+        playbook: pre_install.yml
+
+  pre_tasks:
+    - name: 显示初始化信息
+      debug:
+        msg: |
+          ==================================================
+          QFusion 远程初始化流程
+          ==================================================
+          目标主机: {{ inventory_hostname }}
+          操作系统: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          初始化步骤:
+          {% for step in init_steps %}
+            {{ loop.index }}. {{ step.name }}
+          {% endfor %}
+          ==================================================
+      tags: ['always']
+
+  tasks:
+    # 步骤1: 环境检查
+    - name: 步骤1 - 执行环境检查
+      include_role:
+        name: qfusion_check
+      tags: ['check']
+
+    # 步骤2: 系统修复
+    - name: 步骤2 - 执行系统修复
+      include_role:
+        name: qfusion_check
+        tasks_from: fix.yml
+      tags: ['fix']
+
+    # 步骤3: RAID配置（交互式）
+    - name: 步骤3 - 检查是否需要RAID配置
+      debug:
+        msg: |
+          ==================================================
+          RAID配置说明
+          ==================================================
+          原脚本中的RAID配置需要用户交互选择
+          在Ansible中，可以通过以下方式实现:
+
+          方案1: 使用变量定义RAID配置
+          方案2: 使用Ansible Tower/AWX进行交互式配置
+          方案3: 手动配置后继续
+
+          当前采用方案3: 跳过RAID配置，继续后续步骤
+          ==================================================
+
+    # 步骤4: 安装前准备
+    - name: 步骤4 - 执行安装前准备
+      block:
+        - name: 检查并安装必需软件包
+          package:
+            name: "{{ required_packages }}"
+            state: present
+
+        - name: 确保SSH服务运行
+          systemd:
+            name: sshd
+            state: started
+            enabled: yes
+
+        - name: 配置时区
+          timezone:
+            name: Asia/Shanghai
+
+        - name: 同步系统时间
+          shell: |
+            yum install -y chrony || yum install -y ntp
+            systemctl enable --now chrony || systemctl enable --now ntpd
+          failed_when: false
+
+        - name: 清理临时文件
+          shell: rm -rf /tmp/* 2>/dev/null || true
+
+        - name: 创建必要的目录
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          loop:
+            - /var/log/qfusion
+            - /opt/qfusion
+            - /data/qfusion
+
+        - name: 生成安装前检查摘要
+          copy:
+            dest: /tmp/qfusion_init_summary.txt
+            content: |
+              QFusion 安装前初始化摘要
+              生成时间: {{ ansible_date_time.iso8601 }}
+
+              主机信息:
+              - 主机名: {{ inventory_hostname }}
+              - IP地址: {{ ansible_default_ipv4.address }}
+              - 操作系统: {{ ansible_distribution }} {{ ansible_distribution_version }}
+              - 内核版本: {{ ansible_kernel }}
+              - CPU: {{ ansible_processor_count }} 核心 {{ ansible_processor_cores }} 线程
+              - 内存: {{ ansible_memtotal_mb }} MB
+
+              磁盘信息:
+              {% for dev in ansible_devices.keys() %}
+              - /dev/{{ dev }}: {{ ansible_devices[dev].size }}
+              {% endfor %}
+
+              网络信息:
+              - 主网卡: {{ ansible_default_ipv4.interface }}
+              - IP地址: {{ ansible_default_ipv4.address }}
+              - MAC地址: {{ ansible_default_ipv4.macaddress }}
+
+              系统状态:
+              - SELinux: {{ ansible_selinux.status }}
+              - Swap: {{ ansible_swaptotal_mb }} MB
+              - 防火墙: {{ ansible_selinux.status }}
+
+              初始化时间: {{ ansible_date_time.iso8601 }}
+
+  post_tasks:
+    - name: 显示初始化完成信息
+      debug:
+        msg: |
+          ==================================================
+          ✅ {{ inventory_hostname }} 远程初始化完成
+          ==================================================
+          初始化摘要: /tmp/qfusion_init_summary.txt
+          检查报告: {{ report_dir }}/{{ inventory_hostname }}_check_report.txt
+          ==================================================
+      delegate_to: localhost
+
+    - name: 汇总所有节点的初始化结果
+      shell: cat /tmp/qfusion_init_summary.txt 2>/dev/null || echo "摘要不存在"
+      register: init_summaries
+      loop: "{{ ansible_play_batch }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: 显示初始化摘要
+      debug:
+        msg: |
+          ==================================================
+          初始化摘要 - {{ item.item }}
+          ==================================================
+          {{ item.stdout }}
+          ==================================================
+      loop: "{{ init_summaries.results }}"
+      delegate_to: localhost
+      run_once: true
+      when: item.stdout is defined
+
+    - name: 最终检查建议
+      debug:
+        msg: |
+          ==================================================
+          📋 后续步骤建议
+          ==================================================
+          1. 检查所有节点的初始化摘要
+          2. 如需要，手动配置RAID
+          3. 确认网络配置正确
+          4. 如修改了SELinux或grub，请重启系统
+          5. 执行正式的QFusion安装
+          ==================================================
+      delegate_to: localhost
+      run_once: true

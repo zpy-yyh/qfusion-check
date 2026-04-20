@@ -1,0 +1,6 @@
+10.10.156.97 rds001 master root Cljslrl0620!
+10.10.156.98 rds002 master root Cljslrl0620!
+10.10.156.99 rds003 master root Cljslrl0620!
+10.10.156.87 rds004 node root Cljslrl0620!
+10.10.156.88 rds005 node root Cljslrl0620!
+10.10.156.89 rds006 node root Cljslrl0620!

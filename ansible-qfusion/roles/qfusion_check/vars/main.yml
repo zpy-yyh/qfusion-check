@@ -1,0 +1,13 @@
+---
+# QFusion 角色变量
+
+# 兼容原脚本的变量命名
+min_network:
+  min_nic_speed: "{{ network.min_nic_speed }}"
+
+# 检查项结果
+check_results: {}
+
+# 修复标志
+selinux_changed: false
+grub_changed: false

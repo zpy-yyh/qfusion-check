@@ -1,0 +1,57 @@
+---
+# QFusion 只检查playbook
+# 对应原脚本: qfusion.sh --check
+#
+# 功能: 执行所有检查项，不修改任何配置
+# 使用: ansible-playbook -i inventory/hosts.yml playbooks/check_only.yml
+
+- name: QFusion 环境检查（只检查模式）
+  hosts: qfusion_cluster
+  become: yes
+  gather_facts: yes
+
+  vars_files:
+    - ../group_vars/all.yml
+
+  pre_tasks:
+    - name: 显示检查开始信息
+      debug:
+        msg: |
+          ==================================================
+          QFusion 环境检查 - 只检查模式
+          ==================================================
+          目标主机: {{ inventory_hostname }}
+          操作系统: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          内核版本: {{ ansible_kernel }}
+          架构: {{ ansible_architecture }}
+          ==================================================
+
+  roles:
+    - role: qfusion_check
+      tags: ['check']
+
+  post_tasks:
+    - name: 显示检查完成信息
+      debug:
+        msg: |
+          ==================================================
+          ✅ {{ inventory_hostname }} 检查完成
+          ==================================================
+          检查报告: {{ report_dir }}/{{ inventory_hostname }}_check_report.txt
+          ==================================================
+      delegate_to: localhost
+
+    - name: 汇总所有节点的检查结果
+      shell: cat {{ report_dir }}/{{ item }}_check_report.txt 2>/dev/null || echo "报告不存在"
+      register: all_reports
+      loop: "{{ ansible_play_batch }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: 显示汇总信息
+      debug:
+        msg: "{{ item.stdout }}"
+      loop: "{{ all_reports.results }}"
+      delegate_to: localhost
+      run_once: true
+      when: item.stdout is defined

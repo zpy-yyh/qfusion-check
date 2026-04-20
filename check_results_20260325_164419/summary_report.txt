@@ -1,0 +1,11 @@
+# QFusion集群检查报告
+
+检查时间: 2026-03-25 16:45:18
+集群规模: 3 个节点
+
+## 节点列表
+10.10.156.87 node87 worker root Cljslrl0620!
+10.10.156.88 node88 worker root Cljslrl0620!
+10.10.156.89 node89 worker root Cljslrl0620!
+
+## 详细日志目录: /root/zpy/check_results_20260325_164419

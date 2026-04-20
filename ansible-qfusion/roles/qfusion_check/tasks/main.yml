@@ -1,0 +1,646 @@
+---
+# QFusion 核心检查任务
+# 基于 qfusion_package/qfusion.sh 重构
+
+- name: 创建报告目录
+  file:
+    path: "{{ report_dir }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: 初始化检查结果文件
+  copy:
+    content: |
+      # QFusion Ansible 检查报告
+      # 生成时间: {{ ansible_date_time.iso8601 }}
+      # 主机: {{ inventory_hostname }}
+      # 操作系统: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      # 内核: {{ ansible_kernel }}
+      # 架构: {{ ansible_architecture }}
+
+      ## 检查项汇总
+
+    dest: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+    mode: '0644'
+  delegate_to: localhost
+
+# ================== 1. 操作系统检测 ==================
+- name: 检测操作系统类型和版本
+  set_fact:
+    os_type: "{{ 'redhat' if ansible_distribution == 'RedHat' else
+                 'centos' if ansible_distribution == 'CentOS' else
+                 'kylin' if 'Kylin' in ansible_distribution else
+                 'unknown' }}"
+    is_kylin_os: "{{ 'Kylin' in ansible_distribution }}"
+    is_arm_arch: "{{ ansible_architecture == 'aarch64' }}"
+
+- name: 记录操作系统信息
+  lineinfile:
+    path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+    line: "✓ 操作系统: {{ ansible_distribution }} {{ ansible_distribution_version }} ({{ os_type }})"
+    insertafter: '## 检查项汇总'
+  delegate_to: localhost
+
+# ================== 2. 内核版本检查 ==================
+- name: 检查内核版本
+  block:
+    - name: 获取内核版本
+      shell: uname -r
+      register: kernel_version
+      changed_when: false
+
+    - name: 比较内核版本
+      set_fact:
+        kernel_check_pass: "{{ kernel_version.stdout is version(min_kernel_version, '>=') }}"
+
+    - name: 记录内核版本检查结果
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if kernel_check_pass else '✗' }} 内核版本: {{ kernel_version.stdout }} (要求: >= {{ min_kernel_version }})"
+      delegate_to: localhost
+
+    - name: 内核版本不符合要求时警告
+      fail:
+        msg: "内核版本 {{ kernel_version.stdout }} 低于要求 {{ min_kernel_version }}"
+      when:
+        - os_type in ['redhat', 'centos']
+        - not kernel_check_pass
+      failed_when: false
+
+# ================== 3. YUM源配置检查 ==================
+- name: 检查YUM源配置
+  block:
+    - name: 检查YUM源目录
+      stat:
+        path: /etc/yum.repos.d/
+      register: yum_repos_dir
+
+    - name: 列出YUM源文件
+      shell: ls -1 /etc/yum.repos.d/*.repo 2>/dev/null | wc -l
+      register: yum_repo_count
+      changed_when: false
+
+    - name: 检查YUM是否可用
+      shell: yum repolist 2>&1 | head -5
+      register: yum_repolist
+      changed_when: false
+
+    - name: 记录YUM源状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if yum_repo_count.stdout|int > 0 else '✗' }} YUM源: {{ yum_repo_count.stdout }} 个仓库文件"
+      delegate_to: localhost
+
+# ================== 4. 硬件时间同步检查 ==================
+- name: 检查硬件时间同步
+  block:
+    - name: 获取系统时间和硬件时间
+      shell: |
+        sys_time=$(date +%s)
+        hw_time=$(hwclock -u 2>/dev/null || hwclock 2>/dev/null | awk '{print $5,$6,$7}' | tr -d ',')
+        echo "$sys_time $hw_time"
+      register: time_check
+      changed_when: false
+
+    - name: 检查hwclock命令
+      command: which hwclock
+      register: hwclock_path
+      changed_when: false
+      failed_when: false
+
+    - name: 记录硬件时间状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if hwclock_path.rc == 0 else '⚠' }} 硬件时间同步: {{ 'hwclock可用' if hwclock_path.rc == 0 else 'hwclock不可用' }}"
+      delegate_to: localhost
+
+# ================== 5. 网卡速率检查 ==================
+- name: 检查网卡速率
+  block:
+    - name: 检测是否为虚拟机
+      shell: |
+        # 使用systemd-detect-virt检测虚拟化
+        virt_type=$(systemd-detect-virt 2>/dev/null)
+        if [ "$virt_type" != "none" ] && [ -n "$virt_type" ]; then
+          echo "$virt_type"
+        else
+          # 检查DMI信息
+          if [ -f /sys/class/dmi/id/product_name ]; then
+            product_name=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
+            if echo "$product_name" | grep -qiE "vmware|virtualbox|qemu|kvm|xen|hyper-v|virtual machine"; then
+              echo "virtual"
+            else
+              echo "physical"
+            fi
+          else
+            echo "physical"
+          fi
+        fi
+      register: vm_detection
+      changed_when: false
+      failed_when: false
+
+    - name: 判断是否为虚拟机
+      set_fact:
+        is_virtual_machine: "{{ vm_detection.stdout != 'physical' }}"
+
+    - name: 获取网卡信息（仅物理机）
+      shell: |
+        for dev in /sys/class/net/*; do
+          if [ -d "$dev" ]; then
+            dev_name=$(basename "$dev")
+            # 跳过本地回环
+            if [ "$dev_name" != "lo" ]; then
+              speed=$(cat "$dev/speed" 2>/dev/null || echo "0")
+              if [ "$speed" != "0" ] && [ "$speed" != "-1" ] && [ "$speed" != "65535" ]; then
+                echo "$dev_name $speed"
+              fi
+            fi
+          fi
+        done
+      register: nic_info
+      changed_when: false
+      when: not is_virtual_machine | default(false)
+
+    - name: 提取网卡速率列表（仅物理机）
+      set_fact:
+        nic_speed_list: "{{ nic_info.stdout_lines | select('search', '[0-9]+') | map('regex_replace', '.* ', '') | map('int') | list }}"
+      when: not is_virtual_machine | default(false)
+
+    - name: 检查网卡速率是否达标（仅物理机）
+      set_fact:
+        nic_speed_ok: "{{ nic_speed_list[0] | int >= network.min_nic_speed | int if nic_speed_list | length > 0 else false }}"
+      when: not is_virtual_machine | default(false)
+
+    - name: 记录网卡状态（物理机-有速率信息）
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if nic_speed_ok else '⚠' }} 网卡速率: {{ nic_speed_list[0] if nic_speed_list | length == 1 else nic_speed_list | min }} Mbps (要求: >= {{ network.min_nic_speed }} Mbps)"
+      delegate_to: localhost
+      when:
+        - not is_virtual_machine | default(false)
+        - nic_speed_list | default([]) | length > 0
+
+    - name: 记录网卡状态（物理机-无速率信息）
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "⚠ 网卡速率: 无法获取网卡速率信息"
+      delegate_to: localhost
+      when:
+        - not is_virtual_machine | default(false)
+        - nic_speed_list | default([]) | length == 0
+
+    - name: 记录网卡状态（虚拟机）
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "⚠ 网卡速率: 虚拟机环境，跳过检查 (检测到: {{ vm_detection.stdout }})"
+      delegate_to: localhost
+      when: is_virtual_machine | default(false)
+
+# ================== 6. DNS配置检查 ==================
+- name: 检查DNS配置
+  block:
+    - name: 检查/etc/resolv.conf
+      stat:
+        path: /etc/resolv.conf
+      register: resolv_conf
+
+    - name: 读取DNS服务器
+      shell: grep "^nameserver" /etc/resolv.conf 2>/dev/null || echo "none"
+      register: dns_servers
+      changed_when: false
+
+    - name: 记录DNS配置
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if 'none' not in dns_servers.stdout else '⚠' }} DNS配置: {{ dns_servers.stdout }}"
+      delegate_to: localhost
+
+# ================== 7. NetworkManager管理检查 ==================
+- name: 检查NetworkManager
+  block:
+    - name: 检查NetworkManager服务状态
+      systemd:
+        name: NetworkManager
+      register: nm_status
+
+    - name: 记录NetworkManager状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if nm_status.status.ActiveState == 'active' else '⚠' }} NetworkManager: {{ nm_status.status.ActiveState }}"
+      delegate_to: localhost
+
+# ================== 8. Swap分区检查 ==================
+- name: 检查Swap分区
+  block:
+    - name: 检查swap使用情况
+      shell: free -m | awk '/^Swap:/ {print $2}'
+      register: swap_size
+      changed_when: false
+
+    - name: 检查swap是否启用
+      shell: swapon --show | wc -l
+      register: swap_enabled_count
+      changed_when: false
+
+    - name: 记录Swap状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '⚠' if swap_enabled_count.stdout|int > 0 else '✓' }} Swap分区: {{ swap_size.stdout }} MB"
+      delegate_to: localhost
+
+# ================== 9. SELinux检查 ==================
+- name: 检查SELinux
+  block:
+    - name: 获取SELinux运行状态
+      command: getenforce
+      register: selinux_status
+      changed_when: false
+
+    - name: 获取SELinux配置文件状态
+      shell: grep "^SELINUX=" /etc/selinux/config 2>/dev/null | cut -d= -f2 || echo "not_found"
+      register: selinux_config
+      changed_when: false
+
+    - name: 判断SELinux状态是否一致
+      set_fact:
+        selinux_runtime_ok: "{{ selinux_status.stdout|lower == system.selinux_state|lower }}"
+        selinux_config_ok: "{{ selinux_config.stdout|lower == system.selinux_state|lower }}"
+        selinux_ok: "{{ selinux_status.stdout|lower == system.selinux_state|lower and selinux_config.stdout|lower == system.selinux_state|lower }}"
+
+    - name: 记录SELinux状态（一致）
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if selinux_ok else '⚠' }} SELinux: 运行={{ selinux_status.stdout }}, 配置={{ selinux_config.stdout }} {{ '(不一致!)' if not selinux_ok else '' }}"
+      delegate_to: localhost
+
+# ================== 10. I/O调度算法检查 ==================
+- name: 检查I/O调度算法
+  block:
+    - name: 获取磁盘调度器配置
+      shell: |
+        for dev in /sys/block/sd*; do
+          if [ -d "$dev/queue" ]; then
+            dev_name=$(basename "$dev")
+            scheduler=$(cat "$dev/queue/scheduler" 2>/dev/null | grep -o '\[.*\]' | tr -d '[]')
+            if [ -n "$scheduler" ]; then
+              echo "$dev_name $scheduler"
+            fi
+          fi
+        done
+      register: io_schedulers
+      changed_when: false
+
+    - name: 记录I/O调度算法
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if hardware.io_scheduler in io_schedulers.stdout else '⚠' }} I/O调度: {{ io_schedulers.stdout }}"
+      delegate_to: localhost
+
+# ================== 11. Auditd检查 ==================
+- name: 检查Auditd服务
+  block:
+    - name: 检查auditd服务状态
+      systemd:
+        name: auditd
+      register: auditd_status
+
+    - name: 记录Auditd状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if not system.auditd_enabled else '⚠' }} Auditd服务: {{ auditd_status.status.ActiveState }}"
+      delegate_to: localhost
+
+# ================== 12. 主机名格式检查 ==================
+- name: 检查主机名格式
+  block:
+    - name: 检查主机名是否符合FQDN格式
+      set_fact:
+        hostname_valid: "{{ inventory_hostname is regex('[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*') }}"
+
+    - name: 记录主机名状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if hostname_valid else '⚠' }} 主机名: {{ inventory_hostname }}"
+      delegate_to: localhost
+
+# ================== 13. 必需软件包检查 ==================
+- name: 检查必需软件包
+  block:
+    - name: 一次性检查所有必需���件包
+      shell: |
+        missing_packages=""
+        for pkg in bash openssh-server openssh-clients net-tools lsof vim wget curl rsync; do
+          if ! rpm -q "$pkg" &>/dev/null; then
+            missing_packages="$missing_packages $pkg"
+          fi
+        done
+        if [ -n "$missing_packages" ]; then
+          echo "missing:$missing_packages"
+        else
+          echo "all_installed"
+        fi
+      register: required_packages_check
+      changed_when: false
+
+    - name: 解析必需包检查结果
+      set_fact:
+        required_all_installed: "{{ required_packages_check.stdout == 'all_installed' }}"
+        missing_required_packages_list: "{{ (required_packages_check.stdout | regex_replace('^missing:', '')).split() if required_packages_check.stdout.startswith('missing:') else [] }}"
+
+    - name: 记录软件包状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if required_all_installed else '⚠' }} 必需软件包: 缺少 {{ missing_required_packages_list | length }} 个"
+      delegate_to: localhost
+
+# ================== 13.1 Oracle依赖包检查 ==================
+- name: 检查Oracle数据库依赖包
+  block:
+    - name: 一次性检查所有Oracle依赖包
+      shell: |
+        missing_packages=""
+        for pkg in bc binutils elfutils-libelf elfutils-libelf-devel fontconfig-devel glibc glibc-devel ksh libaio libaio-devel libXrender libXrender-devel libX11 libXau libXi libXtst libgcc libstdc++ libstdc++-devel libxcb make policycoreutils smartmontools sysstat; do
+          if ! rpm -q "$pkg" &>/dev/null; then
+            missing_packages="$missing_packages $pkg"
+          fi
+        done
+        if [ -n "$missing_packages" ]; then
+          echo "missing:$missing_packages"
+        else
+          echo "all_installed"
+        fi
+      register: oracle_packages_check
+      changed_when: false
+
+    - name: 解析Oracle包检查结果
+      set_fact:
+        oracle_all_installed: "{{ oracle_packages_check.stdout == 'all_installed' }}"
+        missing_oracle_packages_list: "{{ (oracle_packages_check.stdout | regex_replace('^missing:', '')).split() if oracle_packages_check.stdout.startswith('missing:') else [] }}"
+
+    - name: 记录Oracle依赖包状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if oracle_all_installed else '⚠' }} Oracle依赖包: 缺少 {{ missing_oracle_packages_list | length }} 个"
+      delegate_to: localhost
+
+    - name: 显示缺失的Oracle依赖包详情
+      debug:
+        msg: "缺失的Oracle包: {{ missing_oracle_packages_list | join(', ') }}"
+      when: not oracle_all_installed
+
+# ================== 14. 容器软件冲突检查 ==================
+- name: 检查容器软件冲突
+  block:
+    - name: 检查冲突软件包
+      shell: rpm -q {{ item }} 2>/dev/null && echo "installed" || echo "not_found"
+      register: container_pkgs
+      changed_when: false
+      loop: "{{ kubernetes.conflicting_packages }}"
+
+    - name: 识别已安装的冲突软件
+      set_fact:
+        conflicting_installed: "{{ container_pkgs.results | selectattr('stdout', 'equalto', 'installed') | map(attribute='item') | list }}"
+
+    - name: 记录容器软件状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if conflicting_installed|length == 0 else '⚠' }} 容器软件冲突: {{ conflicting_installed|join(', ') }}"
+      delegate_to: localhost
+
+# ================== 15. /tmp目录权限检查 ==================
+- name: 检��/tmp目录权限
+  block:
+    - name: 获取/tmp目录权限
+      stat:
+        path: /tmp
+      register: tmp_stat
+
+    - name: 检查/tmp权限是否正确
+      set_fact:
+        tmp_perms_ok: "{{ tmp_stat.stat.mode == system.tmp_dir_perms }}"
+
+    - name: 记录/tmp权限状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if tmp_perms_ok else '⚠' }} /tmp权限: {{ tmp_stat.stat.mode }}"
+      delegate_to: localhost
+
+# ================== 16. virbr0网卡检查 ==================
+- name: 检查virbr0网卡
+  block:
+    - name: 检查virbr0网卡是否存在
+      shell: ip link show virbr0 2>/dev/null && echo "exists" || echo "not_found"
+      register: virbr0_status
+      changed_when: false
+
+    - name: 记录virbr0状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '⚠' if virbr0_status.stdout == 'exists' else '✓' }} virbr0网卡: {{ '存在' if virbr0_status.stdout == 'exists' else '不存在' }}"
+      delegate_to: localhost
+
+# ================== 17. CPU AVX指令集检查 ==================
+- name: 检查CPU AVX指令集
+  block:
+    - name: 检查CPU AVX支持
+      shell: grep -o 'avx' /proc/cpuinfo | wc -l
+      register: avx_count
+      changed_when: false
+
+    - name: 记录AVX支持状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if avx_count.stdout|int > 0 else '✗' }} CPU AVX指令集: {{ '支持' if avx_count.stdout|int > 0 else '不支持' }}"
+      delegate_to: localhost
+
+# ================== 18. 用户资源限制检查 ==================
+- name: 检查用户资源限制
+  block:
+    - name: 检查ulimit配置
+      shell: ulimit -n
+      register: ulimit_nofile
+      changed_when: false
+
+    - name: 检查nproc配置
+      shell: ulimit -u
+      register: ulimit_nproc
+      changed_when: false
+
+    - name: 检查limits.conf配置
+      shell: grep -E "^*.*nofile" /etc/security/limits.conf 2>/dev/null || echo "not_found"
+      register: limits_config
+      changed_when: false
+
+    - name: 记录ulimit状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if ulimit_nofile.stdout|int >= 65536 else '⚠' }} 资源限制: nofile={{ ulimit_nofile.stdout }}, nproc={{ ulimit_nproc.stdout }}"
+      delegate_to: localhost
+
+# ================== 19. lsblk与fstab匹配检查 ==================
+- name: 检查lsblk与fstab匹配
+  block:
+    - name: 检查fstab中的设备
+      shell: grep -vE '^#|^$|swap' /etc/fstab | awk '{print $1}' | grep -v '^UUID' || true
+      register: fstab_devices
+      changed_when: false
+
+    - name: 检查fstab中的UUID
+      shell: grep -vE '^#|^$|swap' /etc/fstab | grep '^UUID' | sed 's/UUID=//' || true
+      register: fstab_uuids
+      changed_when: false
+
+    - name: 验证设备是否存在
+      shell: |
+        missing=0
+        for dev in {{ fstab_devices.stdout_lines | join(' ') }}; do
+          if [[ "$dev" =~ ^/dev/ ]]; then
+            dev_name=$(basename "$dev")
+            if ! lsblk -o NAME -n | grep -q "^${dev_name}$"; then
+              missing=$((missing+1))
+            fi
+          fi
+        done
+        echo $missing
+      register: missing_devices
+      changed_when: false
+
+    - name: 记录fstab匹配状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if missing_devices.stdout|int == 0 else '⚠' }} lsblk与fstab匹配: {{ missing_devices.stdout|int }} 个设备不匹配"
+      delegate_to: localhost
+
+# ================== 20. IPv6状态检查 ==================
+- name: 检查IPv6状态
+  block:
+    - name: 检查IPv6是否已启用
+      shell: ip -6 addr show 2>/dev/null | grep -v 'scope link' | wc -l
+      register: ipv6_count
+      changed_when: false
+
+    - name: 检查sysctl IPv6配置
+      shell: sysctl net.ipv6.conf.all.disable_ipv6 2>/dev/null | cut -d= -f2
+      register: ipv6_disabled
+      changed_when: false
+
+    - name: 记录IPv6状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if network.disable_ipv6 or ipv6_disabled.stdout == '1' else '⚠' }} IPv6状态: {{ '已禁用' if network.disable_ipv6 or ipv6_disabled.stdout == '1' else '已启用' }}"
+      delegate_to: localhost
+
+# ================== 21. iptables状态检查 ==================
+- name: 检查iptables状态
+  block:
+    - name: 检查iptables服务
+      systemd:
+        name: iptables
+      register: iptables_status
+
+    - name: 检查ip6tables服务
+      systemd:
+        name: ip6tables
+      register: ip6tables_status
+
+    - name: 记录iptables状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if network.stop_iptables else '⚠' }} iptables: {{ iptables_status.status.ActiveState }}, ip6tables: {{ ip6tables_status.status.ActiveState }}"
+      delegate_to: localhost
+
+# ================== 22. kdump参数检查 ==================
+- name: 检查kdump配置
+  block:
+    - name: 检查kdump服务状态
+      systemd:
+        name: kdump
+      register: kdump_status
+
+    - name: 检查kdumpctl
+      command: which kdumpctl
+      register: kdumpctl_path
+      changed_when: false
+      failed_when: false
+
+    - name: 记录kdump状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if not kdump.enabled or kdumpctl_path.rc != 0 else '⚠' }} kdump服务: {{ kdump_status.status.ActiveState }}"
+      delegate_to: localhost
+
+# ================== 23. crashkernel内存检查 ==================
+- name: 检查crashkernel配置
+  block:
+    - name: 检查grub配置中的crashkernel
+      shell: grep -o 'crashkernel=[^ ]*' /etc/default/grub 2>/dev/null || grep -o 'crashkernel=[^ ]*' /proc/cmdline 2>/dev/null || echo "not_found"
+      register: crashkernel_config
+      changed_when: false
+
+    - name: 使用kdumpctl检查保留内存
+      shell: kdumpctl showmem 2>/dev/null || echo "0"
+      register: kdump_memory
+      changed_when: false
+
+    - name: 记录crashkernel状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if crashkernel_config.stdout != 'not_found' else '⚠' }} crashkernel: {{ crashkernel_config.stdout }} (保留: {{ kdump_memory.stdout }})"
+      delegate_to: localhost
+
+# ================== 24. 裸盘LVM挂载检查 ==================
+- name: 检查裸盘LVM挂载
+  block:
+    - name: 获取所有磁盘信息
+      shell: lsblk -d -o NAME,TYPE,MOUNTPOINT -n | grep -v 'sr'
+      register: disk_info
+      changed_when: false
+
+    - name: 统计LVM和裸盘
+      shell: |
+        lvm_count=$(lsblk -d -o NAME -n | xargs -I {} lsblk /dev/{} | grep -c 'LVM' || echo 0)
+        raw_count=$(lsblk -d -o NAME,TYPE,MOUNTPOINT -n | grep -v 'sr' | grep 'disk' | wc -l)
+        echo "$lvm_count $raw_count"
+      register: disk_counts
+      changed_when: false
+
+    - name: 记录磁盘挂载状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if disk_counts.stdout.split()[0]|int > 0 else '⚠' }} 磁盘挂载: LVM={{ disk_counts.stdout.split()[0] }}, 裸盘={{ disk_counts.stdout.split()[1] }}"
+      delegate_to: localhost
+
+# ================== 25. 麒麟ARM bpf_jit检查 ==================
+- name: 检查麒麟系统bpf_jit（麒麟ARM特有）
+  block:
+    - name: 检查bpf_jit_enable
+      shell: cat /proc/sys/net/core/bpf_jit_enable 2>/dev/null || echo "0"
+      register: bpf_jit_enable
+      changed_when: false
+
+    - name: 检查bpf_jit_limit
+      shell: cat /proc/sys/net/core/bpf_jit_limit 2>/dev/null || echo "0"
+      register: bpf_jit_limit
+      changed_when: false
+
+    - name: 检查bpf_jit已使用内存
+      shell: cat /proc/vmallocinfo 2>/dev/null | grep bpf_jit | awk '{s+=$2} END {print s}' || echo "0"
+      register: bpf_jit_used
+      changed_when: false
+
+    - name: 记录bpf_jit状态
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if bpf_jit_limit.stdout|int >= kylin.bpf_jit_limit else '⚠' }} bpf_jit (麒麟ARM): enable={{ bpf_jit_enable.stdout }}, limit={{ bpf_jit_limit.stdout }}, used={{ bpf_jit_used.stdout }}"
+      delegate_to: localhost
+  when:
+    - is_kylin_os
+    - is_arm_arch
+
+# ================== 检查完成 ==================
+- name: 检查完成通知
+  debug:
+    msg: "✅ {{ inventory_hostname }} 检查完成，报告已保存到 {{ report_dir }}/{{ inventory_hostname }}_check_report.txt"

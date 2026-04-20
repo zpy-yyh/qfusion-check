@@ -1,0 +1,38 @@
+---
+# QFusion 处理程序
+
+# SELinux修复后重启
+- name: 重启系统（SELinux修改后）
+  reboot:
+    reboot_timeout: 3600
+    connect_timeout: 15
+    test_command: whoami
+  when:
+    - selinux_changed | default(false)
+    - not ansible_check_mode
+
+# NetworkManager重启
+- name: 重启NetworkManager
+  systemd:
+    name: NetworkManager
+    state: restarted
+  when: not ansible_check_mode
+
+# 重载sysctl配置
+- name: 重载sysctl配置
+  sysctl:
+    reload: yes
+  when: not ansible_check_mode
+
+# 重新生成grub配置
+- name: 重新生成grub配置
+  command: grub2-mkconfig -o /boot/grub2/grub.cfg
+  when:
+    - grub_changed | default(false)
+    - not ansible_check_mode
+
+# 重载systemd配置
+- name: 重载systemd配置
+  systemd:
+    daemon_reload: yes
+  when: not ansible_check_mode
