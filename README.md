@@ -1,3 +1,4 @@
+
 # QFusion 项目总览
 
 ## 📂 项目简介
@@ -113,7 +114,7 @@ bash qfusion.sh --check
 
 ## 🔧 工具脚本
 
-### 批量��查工具
+### 批量  查工具
 - `batch_check_only_expect.sh` - 批量只读检查（expect版本）
 - `batch_check_only.sh` - 批量只读检查（密钥版本）
 
@@ -257,3 +258,6 @@ cat check_results_*/10.10.156.97/report.txt
 
 **最后更新**: 2026-04-03
 **维护者**: QFusion项目组
+# qfusion-check
+qfusion安装前后检查项自动化检查
+
