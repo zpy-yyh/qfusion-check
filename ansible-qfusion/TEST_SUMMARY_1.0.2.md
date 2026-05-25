@@ -9,8 +9,8 @@
 - Ansible版本: 2.11.12 (通过pip3安装)
 
 ### 目标节点
-- master1: 10.10.156.87
-- master2: 10.10.156.99
+- master1: 192.168.1.87
+- master2: 192.168.1.99
 - 操作系统: 麒麟V10 SP3
 - 内核版本: 4.19.90-89.26.v2401.ky10.x86_64
 
@@ -101,8 +101,8 @@ ansible-playbook -i inventory/hosts.yml playbooks/check_only.yml \
 ### 2. SSH密钥认证（推荐）
 ```bash
 # 配置SSH密钥
-ssh-copy-id root@10.10.156.87
-ssh-copy-id root@10.10.156.99
+ssh-copy-id root@192.168.1.87
+ssh-copy-id root@192.168.1.99
 
 # 运行playbook
 ansible-playbook -i inventory/hosts.yml playbooks/check_only.yml

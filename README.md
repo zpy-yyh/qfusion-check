@@ -1,13 +1,12 @@
 
-# QFusion 项目总览
+# qfusion-check
 
 ## 📂 项目简介
 
-本目录包含QFusion（青云Fusion）安装前检查和初始化的所有相关文件，包括：
-- 原始Bash脚本版本
-- 新的Ansible自动化版本
-- 各种工具脚本和文档
-- 检查结果存档
+本项目提供基于 K8s 的数据库私有云平台安装前的自动化环境检查工具，包含：
+- Bash 脚本版本
+- Ansible 自动化版本
+- 使用文档和操作指南
 
 ---
 
@@ -38,7 +37,7 @@
 
 ```bash
 # 1. 进入Ansible项目目录
-cd /root/zpy/ansible-qfusion
+cd /opt/qfusion-check/ansible-qfusion
 
 # 2. 配置节点清单
 vi inventory/hosts.yml
@@ -51,7 +50,7 @@ vi inventory/hosts.yml
 
 ```bash
 # 1. 进入Bash脚本目录
-cd /root/zpy/qfusion_package
+cd /opt/qfusion-check/qfusion_package
 
 # 2. 运行检查
 bash qfusion.sh --check
@@ -145,7 +144,7 @@ bash qfusion.sh --check
 cat check_results_*/summary_report.txt
 
 # 查看特定节点报告
-cat check_results_*/10.10.156.97/report.txt
+cat check_results_*/192.168.1.97/report.txt
 ```
 
 ---
@@ -212,8 +211,8 @@ cat check_results_*/10.10.156.97/report.txt
 
 ## 📞 技术支持
 
-- 原Bash脚本: `/root/zpy/qfusion_package/qfusion.sh`
-- Ansible项目: `/root/zpy/ansible-qfusion/`
+- 原Bash脚本: `/opt/qfusion-check/qfusion_package/qfusion.sh`
+- Ansible项目: `/opt/qfusion-check/ansible-qfusion/`
 - 完整文档: 查看各目录下的 `README.md` 文件
 
 ---
@@ -257,7 +256,4 @@ cat check_results_*/10.10.156.97/report.txt
 ---
 
 **最后更新**: 2026-04-03
-**维护者**: QFusion项目组
-# qfusion-check
-qfusion安装前后检查项自动化检查
 

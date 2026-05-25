@@ -1,9 +1,0 @@
-spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@10.10.156.89 bash /tmp/qfusion.sh --check
-Warning: Permanently added '10.10.156.89' (ED25519) to the list of known hosts.
-
-Authorized users only. All activities may be monitored and reported.
-root@10.10.156.89's password: 
-
-[0;32m[INFO][0m 开始执行所有检查项...
-
-[0;34m[*][0m 检查YUM源配置...

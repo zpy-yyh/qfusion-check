@@ -48,7 +48,7 @@ ansible --version
 qfusion_masters:
   hosts:
     master1:
-      ansible_host: 10.10.156.97
+      ansible_host: 192.168.1.97
       ansible_user: root
       ansible_ssh_private_key_file: /root/.ssh/id_rsa
 ```
@@ -60,9 +60,9 @@ qfusion_masters:
 ssh-keygen -t rsa -b 2048 -N ""
 
 # 复制到目标节点
-ssh-copy-id root@10.10.156.97
-ssh-copy-id root@10.10.156.98
-ssh-copy-id root@10.10.156.87
+ssh-copy-id root@192.168.1.97
+ssh-copy-id root@192.168.1.98
+ssh-copy-id root@192.168.1.87
 ```
 
 ### 4. 测试连接
@@ -257,7 +257,7 @@ cat /tmp/qfusion_ansible_reports/master1_check_report.txt
 
 ```bash
 # 检查SSH连接
-ssh root@10.10.156.97
+ssh root@192.168.1.97
 
 # 使用详细模式
 ansible -i inventory/hosts.yml all -m ping -vvv
@@ -403,7 +403,7 @@ ansible-playbook playbooks/check_only.yml --gather-facts no
 - 项目文档：`README.md`
 - 迁移指南：`MIGRATION_GUIDE.md`
 - Ansible官方文档：https://docs.ansible.com/
-- QFusion原脚本：`/root/zpy/qfusion_package/qfusion.sh`
+- QFusion原脚本：`/opt/qfusion-check/qfusion_package/qfusion.sh`
 
 ## 版本信息
 

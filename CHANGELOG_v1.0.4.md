@@ -88,7 +88,7 @@ grep -qiE "vmware|virtualbox|qemu|kvm|xen|hyper-v" /sys/class/dmi/id/product_nam
 ## 🧪 测试结果
 
 ### 测试环境
-- **物理机**: 10.10.156.210 (海光C86-4G, 麒麟V10 SP3)
+- **物理机**: 192.168.1.210 (海光C86-4G, 麒麟V10 SP3)
 - **虚拟机**: KVM虚拟机环境
 
 ### 测试结果

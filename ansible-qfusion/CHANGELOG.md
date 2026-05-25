@@ -10,7 +10,7 @@
 
 ### 测试
 - 在麒麟V10 SP3系统上测试通过
-- 测试2台master节点（10.10.156.87, 10.10.156.99）
+- 测试2台master节点（192.168.1.87, 192.168.1.99）
 - 所有playbook测试通过：check_only.yml, fix_and_check.yml, remote_init.yml
 
 ## [1.0.0] - 2026-04-03

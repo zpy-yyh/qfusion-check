@@ -14,7 +14,7 @@
 | ansible-qfusion-v1.0.3.tar.gz.md5 | 74B | - |
 | ansible-qfusion-v1.0.3.tar.gz.sha256 | 106B | SHA256: dc6d393c97a55dba7195874ba64fc0c8debb9ecb90e639bd59838ca3865634aa |
 
-**文件位置**: `/root/zpy/`
+**文件位置**: `/opt/qfusion-check/`
 
 ---
 
@@ -80,7 +80,7 @@ policycoreutils, smartmontools, sysstat
 ## 🧪 测试结果
 
 ### 测试环境
-- **目标服务器**: 10.10.156.210
+- **目标服务器**: 192.168.1.210
 - **操作系统**: 麒麟V10 SP3
 - **测试时间**: 2026-04-08 15:34
 
@@ -97,7 +97,7 @@ policycoreutils, smartmontools, sysstat
 
 ### 1. 下载和验证
 ```bash
-cd /root/zpy
+cd /opt/qfusion-check
 
 # 验证MD5
 md5sum ansible-qfusion-v1.0.3.tar.gz
@@ -204,9 +204,9 @@ cat /tmp/qfusion_ansible_reports/<hostname>_check_report.txt
 
 ## 📞 支持和反馈
 
-- **文档位置**: `/root/zpy/ansible-qfusion/`
-- **更新日志**: `/root/zpy/CHANGELOG_v1.0.3.md`
-- **发布总结**: `/root/zpy/RELEASE_v1.0.3.md`
+- **文档位置**: `/opt/qfusion-check/ansible-qfusion/`
+- **更新日志**: `/opt/qfusion-check/CHANGELOG_v1.0.3.md`
+- **发布总结**: `/opt/qfusion-check/RELEASE_v1.0.3.md`
 
 **版本**: v1.0.3
 **状态**: 已发布 ✅

@@ -58,14 +58,14 @@ bash qfusion_package/qfusion.sh
 
 ```bash
 # 方式1: 使用包装脚本（推荐）
-cd /root/zpy/ansible-qfusion
+cd /opt/qfusion-check/ansible-qfusion
 ./ansible-playbook-wrapper.sh              # 交互式菜单
 ./ansible-playbook-wrapper.sh --check     # 只检查
 ./ansible-playbook-wrapper.sh --fix       # 检查并修复
 ./ansible-playbook-wrapper.sh --init      # 远程初始化
 
 # 方式2: 直接使用ansible-playbook
-cd /root/zpy/ansible-qfusion
+cd /opt/qfusion-check/ansible-qfusion
 ansible-playbook -i inventory/hosts.yml playbooks/check_only.yml
 ansible-playbook -i inventory/hosts.yml playbooks/fix_and_check.yml
 ansible-playbook -i inventory/hosts.yml playbooks/remote_init.yml
@@ -75,16 +75,16 @@ ansible-playbook -i inventory/hosts.yml playbooks/remote_init.yml
 
 ### 原Bash脚本配置格式
 
-原脚本使用 `/root/zpy/qfusion_package/nodes.conf`，格式：
+原脚本使用 `/opt/qfusion-check/qfusion_package/nodes.conf`，格式：
 ```
 IP地址 主机名 角色 用户名 认证信息
 ```
 
 示例：
 ```conf
-10.10.156.97 rds001 master root password123
-10.10.156.98 rds002 master root password123
-10.10.156.87 rds004 worker root password123
+192.168.1.97 rds001 master root your_password
+192.168.1.98 rds002 master root your_password
+192.168.1.87 rds004 worker root your_password
 ```
 
 ### Ansible配置格式
@@ -95,20 +95,20 @@ Ansible使用YAML格式的inventory文件 `inventory/hosts.yml`：
 qfusion_masters:
   hosts:
     master1:
-      ansible_host: 10.10.156.97
+      ansible_host: 192.168.1.97
       ansible_user: root
       # 密码认证（不推荐）
-      # ansible_ssh_pass: "password123"
+      # ansible_ssh_pass: "your_password"
       # SSH密钥认证（推荐）
       ansible_ssh_private_key_file: /root/.ssh/id_rsa
     master2:
-      ansible_host: 10.10.156.98
+      ansible_host: 192.168.1.98
       ansible_user: root
 
 qfusion_workers:
   hosts:
     worker1:
-      ansible_host: 10.10.156.87
+      ansible_host: 192.168.1.87
       ansible_user: root
 ```
 
@@ -122,8 +122,8 @@ qfusion_workers:
 # nodes_conf_to_ansible_inventory.sh
 # 转换 nodes.conf 到 Ansible inventory
 
-INPUT_FILE="/root/zpy/qfusion_package/nodes.conf"
-OUTPUT_FILE="/root/zpy/ansible-qfusion/inventory/hosts.yml"
+INPUT_FILE="/opt/qfusion-check/qfusion_package/nodes.conf"
+OUTPUT_FILE="/opt/qfusion-check/ansible-qfusion/inventory/hosts.yml"
 
 echo "qfusion_masters:" > "$OUTPUT_FILE"
 echo "  hosts:" >> "$OUTPUT_FILE"
@@ -205,19 +205,19 @@ Ansible推荐使用SSH密钥认证：
 ssh-keygen -t rsa -b 2048 -N "" -f ~/.ssh/id_rsa
 
 # 2. 复制公钥到目标节点
-ssh-copy-id root@10.10.156.97
-ssh-copy-id root@10.10.156.98
-ssh-copy-id root@10.10.156.87
+ssh-copy-id root@192.168.1.97
+ssh-copy-id root@192.168.1.98
+ssh-copy-id root@192.168.1.87
 
 # 3. 测试连接
-ssh root@10.10.156.97
+ssh root@192.168.1.97
 ```
 
 如果必须使用密码，可以在inventory中配置：
 
 ```yaml
 master1:
-  ansible_host: 10.10.156.97
+  ansible_host: 192.168.1.97
   ansible_user: root
   ansible_ssh_pass: "your_password"
 ```
@@ -326,7 +326,7 @@ cat /tmp/qfusion_ansible_reports/*_check_report.txt
 
 ```bash
 # 停止使用Ansible
-cd /root/zpy/qfusion_package
+cd /opt/qfusion-check/qfusion_package
 bash qfusion.sh --check
 ```
 

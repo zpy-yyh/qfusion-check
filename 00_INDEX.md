@@ -1,4 +1,4 @@
-# QFusion 项目目录索引
+# qfusion-check 项目目录索引
 
 > **最后更新**: 2026-04-03
 > **状态**: ✅ 整理完成
@@ -207,7 +207,7 @@ bash qfusion.sh --check
 
 ```bash
 # 查看目录大小
-du -sh /root/zpy/*/ 2>/dev/null | sort -hr
+du -sh /opt/qfusion-check/*/ 2>/dev/null | sort -hr
 ```
 
 **主要目录大小估计**:

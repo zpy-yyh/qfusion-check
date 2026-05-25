@@ -57,8 +57,8 @@ qfusion --help         # 显示帮助信息
 
 1. 创建节点列表文件 `nodes.conf`，格式：
    ```
-   10.10.156.211 root password123
-   10.10.156.212 root password456
+   192.168.1.211 root your_password
+   192.168.1.212 root password456
    ```
 
 2. 运行远程初始化：

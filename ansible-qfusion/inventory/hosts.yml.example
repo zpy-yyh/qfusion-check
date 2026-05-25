@@ -1,0 +1,33 @@
+---
+# 节点清单示例（使用前请修改）
+# 将实际IP地址和密码替换为你的环境信息
+
+all:
+  children:
+    master_nodes:
+      hosts:
+        master1:
+          ansible_host: 192.168.1.10
+          ansible_user: root
+          # ansible_ssh_pass: "your_password"
+          # 推荐使用SSH密钥: ansible_ssh_private_key_file: ~/.ssh/id_rsa
+        master2:
+          ansible_host: 192.168.1.11
+          ansible_user: root
+          # ansible_ssh_pass: "your_password"
+
+    worker_nodes:
+      hosts: {}
+
+    cluster_nodes:
+      children:
+        master_nodes:
+        worker_nodes:
+
+master_nodes:
+  vars:
+    node_role: master
+
+worker_nodes:
+  vars:
+    node_role: worker

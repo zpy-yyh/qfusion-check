@@ -97,13 +97,13 @@
 
 ```bash
 # 1. 进入项目目录
-cd /root/zpy/ansible-qfusion
+cd /opt/qfusion-check/ansible-qfusion
 
 # 2. 配置节点清单
 vi inventory/hosts.yml
 
 # 3. 配置SSH免密登录
-ssh-copy-id root@10.10.156.97
+ssh-copy-id root@192.168.1.97
 
 # 4. 测试连接
 ansible -i inventory/hosts.yml qfusion_cluster -m ping
@@ -168,7 +168,7 @@ ansible -i inventory/hosts.yml qfusion_cluster -m ping
 
 ## 技术支持
 
-- 原Bash脚本：`/root/zpy/qfusion_package/qfusion.sh`
+- 原Bash脚本：`/opt/qfusion-check/qfusion_package/qfusion.sh`
 - 项目文档：`README.md`
 - 迁移指南：`MIGRATION_GUIDE.md`
 - 快速参考：`QUICK_REFERENCE.md`

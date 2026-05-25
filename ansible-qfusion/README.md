@@ -38,7 +38,7 @@ ansible-qfusion/
 qfusion_masters:
   hosts:
     master1:
-      ansible_host: 10.10.156.97
+      ansible_host: 192.168.1.97
       ansible_user: root
       ansible_ssh_private_key_file: /root/.ssh/id_rsa
 ```
@@ -124,7 +124,7 @@ system:
 
 ## 从原Bash脚本迁移
 
-原脚本：`/root/zpy/qfusion_package/qfusion.sh`
+原脚本：`/opt/qfusion-check/qfusion_package/qfusion.sh`
 
 对应关系：
 - `qfusion.sh --check` → `ansible-playbook playbooks/check_only.yml`
@@ -149,7 +149,7 @@ system:
 ### 连接失败
 ```bash
 # 检查SSH连接
-ssh root@10.10.156.97
+ssh root@192.168.1.97
 
 # 使用详细模式运行
 ansible-playbook -i inventory/hosts.yml playbooks/check_only.yml -vvv

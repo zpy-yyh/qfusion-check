@@ -61,23 +61,23 @@ ansible --version
 qfusion_masters:
   hosts:
     master1:
-      ansible_host: 10.10.156.97
+      ansible_host: 192.168.1.97
       ansible_user: root
       ansible_ssh_private_key_file: /root/.ssh/id_rsa
 
 qfusion_workers:
   hosts:
     worker1:
-      ansible_host: 10.10.156.87
+      ansible_host: 192.168.1.87
       ansible_user: root
 ```
 
 ### 3. 配置SSH免密登录
 
 ```bash
-ssh-copy-id root@10.10.156.97
-ssh-copy-id root@10.10.156.98
-ssh-copy-id root@10.10.156.87
+ssh-copy-id root@192.168.1.97
+ssh-copy-id root@192.168.1.98
+ssh-copy-id root@192.168.1.87
 ```
 
 ### 4. 测试连接

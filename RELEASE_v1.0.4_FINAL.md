@@ -14,7 +14,7 @@
 | ansible-qfusion-v1.0.4.tar.gz.md5 | 74B | - |
 | ansible-qfusion-v1.0.4.tar.gz.sha256 | 106B | SHA256: 2efad58a79b7cdf68e6df3340331a28ba1d2eb45436879d7183f41e621eeb925 |
 
-**文件位置**: `/root/zpy/`
+**文件位置**: `/opt/qfusion-check/`
 
 ---
 
@@ -135,7 +135,7 @@ oracle_required_packages:
 ## 🧪 测试验证
 
 ### 测试环境
-- **物理机**: 10.10.156.210 (海光C86-4G, 麒麟V10 SP3)
+- **物理机**: 192.168.1.210 (海光C86-4G, 麒麟V10 SP3)
 - **虚拟机**: KVM虚拟机环境
 
 ### 测试结果
@@ -187,7 +187,7 @@ oracle_required_packages:
 
 #### 1. 下载和验证
 ```bash
-cd /root/zpy
+cd /opt/qfusion-check
 
 # 验证MD5
 echo "7aa78c5ad5f98f1902c18b23ea1b5ec2  ansible-qfusion-v1.0.4.tar.gz" | md5sum -c -
@@ -341,9 +341,9 @@ rpm -ivh /path/to/rpms/*.rpm --nodeps
 ## 📞 技术支持
 
 ### 文档位置
-- 项目文档: `/root/zpy/ansible-qfusion/`
-- 更新日志: `/root/zpy/CHANGELOG_v1.0.4.md`
-- 发布总结: `/root/zpy/RELEASE_v1.0.4_FINAL.md`
+- 项目文档: `/opt/qfusion-check/ansible-qfusion/`
+- 更新日志: `/opt/qfusion-check/CHANGELOG_v1.0.4.md`
+- 发布总结: `/opt/qfusion-check/RELEASE_v1.0.4_FINAL.md`
 
 ### 常见问题
 

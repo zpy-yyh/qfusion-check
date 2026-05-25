@@ -4918,7 +4918,7 @@ create_empty_nodes_file() {
 # 生成时间: $(date '+%Y-%m-%d %H:%M:%S')
 # 
 # 示例:
-# 192.168.1.10 master01 master root password123
+# 192.168.1.10 master01 master root your_password
 # 192.168.1.11 master02 master root /root/.ssh/id_rsa
 
 EOF

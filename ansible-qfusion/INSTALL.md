@@ -56,14 +56,14 @@ ansible all -i inventory/hosts.yml -m shell -a "python --version" --become
 qfusion_masters:
   hosts:
     master1:
-      ansible_host: 10.10.156.97
+      ansible_host: 192.168.1.97
       ansible_user: root
       ansible_ssh_private_key_file: /root/.ssh/id_rsa
 
 qfusion_workers:
   hosts:
     worker1:
-      ansible_host: 10.10.156.87
+      ansible_host: 192.168.1.87
       ansible_user: root
 ```
 
@@ -74,12 +74,12 @@ qfusion_workers:
 ssh-keygen -t rsa -b 2048 -N ""
 
 # 复制公钥到目标节点
-ssh-copy-id root@10.10.156.97
-ssh-copy-id root@10.10.156.98
-ssh-copy-id root@10.10.156.87
+ssh-copy-id root@192.168.1.97
+ssh-copy-id root@192.168.1.98
+ssh-copy-id root@192.168.1.87
 
 # 测试连接
-ssh root@10.10.156.97
+ssh root@192.168.1.97
 ```
 
 ### 5. 测试连接
@@ -220,7 +220,7 @@ kdump:
 
 ```bash
 # 检查SSH连接
-ssh root@10.10.156.97
+ssh root@192.168.1.97
 
 # 使用详细模式
 ansible-playbook -i inventory/hosts.yml playbooks/check_only.yml -vvv
