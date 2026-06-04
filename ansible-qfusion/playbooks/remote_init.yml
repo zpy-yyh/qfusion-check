@@ -99,7 +99,7 @@
           failed_when: false
 
         - name: 清理临时文件
-          shell: rm -rf /tmp/* 2>/dev/null || true
+          shell: find /tmp -maxdepth 1 -name 'qfusion_*' -o -name 'ansible_*' -mtime +7 -delete 2>/dev/null || true
 
         - name: 创建必要的目录
           file:

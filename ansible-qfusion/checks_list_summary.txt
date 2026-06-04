@@ -17,8 +17,8 @@
      - 实现方式: Ansible Facts
 
  2. ✅ 内核版本检查
-     - 要求版本: ≥ 4.19
-     - 差异处理: 麒麟系统无需升级
+     - 要求版本: RedHat/CentOS ≥ 4.19, 麒麟 ≥ 4.19.90-89.26
+     - 差异处理: 麒麟默认内核 89.11 存在安全漏洞需升级到 89.26
      - 实现方式: uname -r + Jinja2版本比较
 
  3. ✅ YUM源配置检查
@@ -161,7 +161,7 @@
 
 检查报告示例:
   ✓ 操作系统: Kylin Linux Advanced Server V10 (kylin)
-  ✓ 内核版本: 4.19.90-89.26.v2401.ky10.x86_64 (要求: >= 4.19)
+  ✓ 内核版本: 4.19.90-89.26.v2401.ky10.x86_64 (要求: >= 4.19, 麒麟构建号 >= 89.26)
   ✓ YUM源: 1 个仓库文件
   ✓ 硬件时间同步: hwclock可用
   ✓ 网卡速率: 最低 1000 Mbps
@@ -196,6 +196,7 @@
 全局配置文件: group_vars/all.yml
 
   - min_kernel_version: "4.19"
+  - kylin.min_kernel_build_kylin: "89.26"
   - network.min_nic_speed: 1000
   - network.dns_servers: ["114.114.114.114", "8.8.8.8"]
   - system.selinux_state: "disabled"

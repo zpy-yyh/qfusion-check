@@ -6,11 +6,18 @@
   when: yum_repo_count.stdout|int == 0
   block:
     - name: 备份现有YUM源配置
-      shell: tar -czf /etc/yum.repos.d/backup_$(date +%Y%m%d_%H%M%S).tar.gz /etc/yum.repos.d/*.repo 2>/dev/null || true
+      shell: |
+        if ls /etc/yum.repos.d/*.repo 2>/dev/null; then
+          tar -czf /etc/yum.repos.d/backup_$(date +%Y%m%d_%H%M%S).tar.gz /etc/yum.repos.d/*.repo
+        else
+          echo "no .repo files to backup"
+        fi
 
     - name: 检测系统类型并配置YUM源
       include_tasks: "{{ role_path }}/tasks/yum_repo_{{ os_type }}.yml"
-      when: os_type in ['redhat', 'centos']
+      when:
+        - os_type in ['redhat', 'centos']
+        - (role_path ~ '/tasks/yum_repo_' ~ os_type ~ '.yml') is exists
 
 # ================== 硬件时间同步修复 ==================
 - name: 修复硬件时间同步
@@ -112,7 +119,7 @@
 
 # ================== Auditd修复 ==================
 - name: 修复Auditd服务
-  when: system.auditd_enabled != auditd_status.status.ActiveState == 'active'
+  when: (system.auditd_enabled | bool) != (auditd_status.status.ActiveState == 'active')
   block:
     - name: {{ '启动' if system.auditd_enabled else '停止' }}Auditd服务
       systemd:
@@ -196,7 +203,7 @@
 
 # ================== kdump修复 ==================
 - name: 修复kdump配置
-  when: kdump.enabled != (kdump_status.status.ActiveState == 'active')
+  when: (kdump.enabled | bool) != (kdump_status.status.ActiveState == 'active')
   block:
     - name: {{ '启动' if kdump.enabled else '停止' }}kdump服务
       systemd:
@@ -273,6 +280,99 @@
       debug:
         msg: "⚠️ 以下包安装失败，请手动检查: {{ oracle_install_failed | map(attribute='item') | join(', ') }}"
       when: oracle_install_failed | length > 0
+
+# ================== 麒麟内核升级修复 ==================
+- name: 升级麒麟内核到目标版本
+  block:
+    - name: 确定麒麟内核升级包文件名
+      set_fact:
+        kylin_kernel_tar: "{{ kylin.kernel_tar_x86 if ansible_architecture == 'x86_64' else kylin.kernel_tar_aarch64 }}"
+
+    - name: 查找内核升级包
+      local_action:
+        module: stat
+        path: "{{ item }}"
+      register: kernel_tar_stat
+      loop:
+        - "{{ playbook_dir }}/../{{ kylin_kernel_tar }}"
+        - "{{ playbook_dir }}/../offline-pkgs/kylin/{{ kylin_kernel_tar }}"
+        - "/tmp/{{ kylin_kernel_tar }}"
+      run_once: true
+
+    - name: 确定可用的内核升级包路径
+      set_fact:
+        kernel_tar_src: "{{ (kernel_tar_stat.results | selectattr('stat.exists', 'equalto', true) | map(attribute='item') | first) | default('') }}"
+      run_once: true
+
+    - name: 检查内核升级包是否存在
+      fail:
+        msg: "未找到麒麟内核升级包 {{ kylin_kernel_tar }}，请将升级包放到 ansible-qfusion/ 或 offline-pkgs/kylin/ 目录下"
+      when: kernel_tar_src == ''
+      run_once: true
+
+    - name: 创建目标升级目录
+      file:
+        path: "{{ kylin.kernel_upgrade_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: 上传内核升级包到目标节点
+      copy:
+        src: "{{ kernel_tar_src }}"
+        dest: "{{ kylin.kernel_upgrade_dir }}/{{ kylin_kernel_tar }}"
+        mode: '0644'
+      run_once: false
+
+    - name: 解压内核升级包
+      unarchive:
+        src: "{{ kylin.kernel_upgrade_dir }}/{{ kylin_kernel_tar }}"
+        dest: "{{ kylin.kernel_upgrade_dir }}/"
+        remote_src: true
+
+    - name: 查找内核RPM包
+      find:
+        paths: "{{ kylin.kernel_upgrade_dir }}"
+        patterns: "*.rpm"
+        recurse: true
+      register: kernel_rpms
+
+    - name: 显示即将安装的内核包
+      debug:
+        msg: "即将安装 {{ kernel_rpms.files | length }} 个内核RPM包: {{ kernel_rpms.files | map(attribute='path') | list }}"
+
+    - name: 安装内核RPM包（升级模式）
+      shell: |
+        rpm -Uvh {{ kernel_rpms.files | map(attribute='path') | join(' ') }}
+      register: kernel_install_result
+      changed_when: true
+
+    - name: 显示内核安装结果
+      debug:
+        msg: "内核升级安装输出: {{ kernel_install_result.stdout_lines }}"
+
+    - name: 检查新内核是否已安装
+      shell: |
+        rpm -qa | grep 'kernel-4.19.90-89.26'
+      register: kernel_installed_check
+      changed_when: false
+
+    - name: 确认内核升级成功
+      debug:
+        msg: "✅ 麒麟内核 4.19.90-89.26 已安装，grub 将自动选择最新内核启动"
+      when: kernel_installed_check.stdout != ''
+
+    - name: 标记需要重启
+      set_fact:
+        kernel_upgrade_reboot: true
+
+    - name: 内核升级完成提醒
+      debug:
+        msg: "⚠️ 麒麟内核已升级到 4.19.90-89.26，请重启系统使新内核生效"
+
+  when:
+    - is_kylin_os
+    - kylin_kernel_ok is defined
+    - not kylin_kernel_ok
 
 # ================== 麒麟ARM bpf_jit修复 ==================
 - name: 修复麒麟系统bpf_jit

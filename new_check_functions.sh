@@ -115,9 +115,26 @@ check_kernel_version() {
             fi
             ;;
         kylin)
-            # 麒麟系统不需要升级内核
-            echo_info "麒麟系统无需升级内核"
-            return 0
+            # 麒麟系统要求内核 >= 4.19.90-89.26
+            # 默认 4.19.90-89.11 存在安全漏洞和存储扩容问题
+            local kylin_target_build="89.26"
+            # 从 uname -r 提取构建号: 4.19.90-89.11.v2401.ky10.x86_64 → 89.11
+            local kylin_build=$(echo "$current_kernel" | grep -oP '\d+\.\d+\.\d+-\K\d+\.\d+')
+            if [ -z "$kylin_build" ]; then
+                echo_warn "无法解析麒麟内核构建号: $current_kernel"
+                echo_info "建议手动确认内核版本是否 >= 4.19.90-${kylin_target_build}"
+                return 2
+            fi
+            if [ "$(printf '%s\n' "$kylin_target_build" "$kylin_build" | sort -V | tail -n1)" != "$kylin_target_build" ] || [ "$kylin_build" = "$kylin_target_build" ]; then
+                echo_info "麒麟内核版本符合要求 ($current_kernel)"
+                return 0
+            else
+                echo_error "麒麟内核版本过低 ($current_kernel)"
+                echo_info "当前构建号: ${kylin_build}，要求 >= ${kylin_target_build}"
+                echo_info "需要升级内核到 4.19.90-${kylin_target_build} 或更高版本"
+                echo_info "升级包位于: zpy/sp3-2403-{aarch64,x86}.tar"
+                return 1
+            fi
             ;;
         *)
             echo_warn "未知操作系统类型: $OS_TYPE"

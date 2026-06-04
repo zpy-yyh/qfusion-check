@@ -11,6 +11,11 @@ supported_os_versions:
 # 最小内核版本要求
 min_kernel_version: "4.19"
 
+# 麒麟系统最小内核构建号 (4.19.90-89.26)
+# 默认 4.19.90-89.11 存在 CNNVD-2025-88283257 等安全漏洞，
+# 且在华为集中式存储场景下数据库集群无法平滑扩容
+min_kernel_build_kylin: "89.26"
+
 # YUM源配置
 yum_repos_path: "/etc/yum.repos.d/"
 local_yum_repo_enabled: false
@@ -134,6 +139,12 @@ kdump:
 kylin:
   # bpf_jit_limit (麒麟ARM)
   bpf_jit_limit: 264241152
+
+  # 内核升级包路径 (相对于 playbooks 目录或绝对路径)
+  # 升级目标: 4.19.90-89.26
+  kernel_tar_x86: "sp3-2403-x86.tar"
+  kernel_tar_aarch64: "sp3-2403-aarch64.tar"
+  kernel_upgrade_dir: "/tmp/qfusion_kylin_kernel_upgrade"
 
 # 检查模式（check_only 或 fix_and_check）
 check_mode: false

@@ -26,7 +26,27 @@
 
 # 重新生成grub配置
 - name: 重新生成grub配置
-  command: grub2-mkconfig -o /boot/grub2/grub.cfg
+  block:
+    - name: 检测grub配置文件路径
+      stat:
+        path: "{{ item }}"
+      loop:
+        - /boot/grub2/grub.cfg
+        - /boot/efi/EFI/centos/grub.cfg
+        - /boot/efi/EFI/redhat/grub.cfg
+      register: grub_cfg_check
+
+    - name: 生成BIOS模式grub配置
+      command: grub2-mkconfig -o /boot/grub2/grub.cfg
+      when:
+        - grub_cfg_check.results[0].stat.exists | default(false)
+
+    - name: 生成UEFI模式grub配置
+      command: grub2-mkconfig -o "{{ item.item }}"
+      when:
+        - item.stat.exists | default(false)
+        - item.item != '/boot/grub2/grub.cfg'
+      loop: "{{ grub_cfg_check.results }}"
   when:
     - grub_changed | default(false)
     - not ansible_check_mode

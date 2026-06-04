@@ -61,13 +61,40 @@
         line: "{{ '✓' if kernel_check_pass else '✗' }} 内核版本: {{ kernel_version.stdout }} (要求: >= {{ min_kernel_version }})"
       delegate_to: localhost
 
-    - name: 内核版本不符合要求时警告
-      fail:
-        msg: "内核版本 {{ kernel_version.stdout }} 低于要求 {{ min_kernel_version }}"
+    - name: 内核版本不符合要求时警告（红帽系）
+      debug:
+        msg: "⚠ 内核版本 {{ kernel_version.stdout }} 低于要求 {{ min_kernel_version }}"
       when:
         - os_type in ['redhat', 'centos']
         - not kernel_check_pass
-      failed_when: false
+
+    - name: 检查麒麟内核构建号
+      block:
+        - name: 提取麒麟内核构建号
+          set_fact:
+            kylin_build: "{{ ansible_kernel | regex_replace('^\\d+\\.\\d+\\.\\d+-(\\d+\\.\\d+).*', '\\1') }}"
+
+        - name: 判断麒麟内核是否需要升级
+          set_fact:
+            kylin_kernel_ok: "{{ kylin_build is version(min_kernel_build_kylin, '>=') }}"
+
+        - name: 麒麟内核版本不符合要求时警告
+          debug:
+            msg: "✗ 麒麟内核构建号 {{ kylin_build }} 低于要求 {{ min_kernel_build_kylin }}，需要升级内核到 4.19.90-{{ min_kernel_build_kylin }}"
+          when: not kylin_kernel_ok
+      when: is_kylin_os
+
+    - name: 覆盖麒麟内核检查结果
+      set_fact:
+        kernel_check_pass: "{{ kylin_kernel_ok }}"
+      when: is_kylin_os
+
+    - name: 记录麒麟内核检查结果
+      lineinfile:
+        path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
+        line: "{{ '✓' if kylin_kernel_ok else '✗' }} 麒麟内核构建号: {{ kylin_build }} (要求: >= {{ min_kernel_build_kylin }})"
+      delegate_to: localhost
+      when: is_kylin_os
 
 # ================== 3. YUM源配置检查 ==================
 - name: 检查YUM源配置
@@ -318,12 +345,12 @@
   block:
     - name: 检查主机名是否符合FQDN格式
       set_fact:
-        hostname_valid: "{{ inventory_hostname is regex('[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*') }}"
+        hostname_valid: "{{ ansible_hostname is regex('^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$') }}"
 
     - name: 记录主机名状态
       lineinfile:
         path: "{{ report_dir }}/{{ inventory_hostname }}_check_report.txt"
-        line: "{{ '✓' if hostname_valid else '⚠' }} 主机名: {{ inventory_hostname }}"
+        line: "{{ '✓' if hostname_valid else '⚠' }} 主机名: {{ ansible_hostname }}"
       delegate_to: localhost
 
 # ================== 13. 必需软件包检查 ==================
@@ -332,11 +359,11 @@
     - name: 一次性检查所有必需���件包
       shell: |
         missing_packages=""
-        for pkg in bash openssh-server openssh-clients net-tools lsof vim wget curl rsync; do
-          if ! rpm -q "$pkg" &>/dev/null; then
-            missing_packages="$missing_packages $pkg"
-          fi
-        done
+        {% for pkg in required_packages %}
+        if ! rpm -q "{{ pkg }}" &>/dev/null; then
+          missing_packages="$missing_packages {{ pkg }}"
+        fi
+        {% endfor %}
         if [ -n "$missing_packages" ]; then
           echo "missing:$missing_packages"
         else
@@ -362,11 +389,11 @@
     - name: 一次性检查所有Oracle依赖包
       shell: |
         missing_packages=""
-        for pkg in bc binutils elfutils-libelf elfutils-libelf-devel fontconfig-devel glibc glibc-devel ksh libaio libaio-devel libXrender libXrender-devel libX11 libXau libXi libXtst libgcc libstdc++ libstdc++-devel libxcb make policycoreutils smartmontools sysstat; do
-          if ! rpm -q "$pkg" &>/dev/null; then
-            missing_packages="$missing_packages $pkg"
-          fi
-        done
+        {% for pkg in oracle_required_packages %}
+        if ! rpm -q "{{ pkg }}" &>/dev/null; then
+          missing_packages="$missing_packages {{ pkg }}"
+        fi
+        {% endfor %}
         if [ -n "$missing_packages" ]; then
           echo "missing:$missing_packages"
         else

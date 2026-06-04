@@ -44,14 +44,33 @@ show_separator() {
 }
 
 # 检查依赖
+DEPLOY_SCRIPT="offline-pkgs/setup.sh"
+
 check_dependencies() {
     echo_blue "检查依赖..."
+
+    # 如果 Ansible 未安装，尝试从离线包自动部署
     if ! command -v ansible &>/dev/null; then
-        echo_error "未安装Ansible，请先安装"
-        echo_info "安装命令: yum install -y ansible"
-        exit 1
+        echo_warn "未检测到 Ansible，尝试自动部署环境..."
+        echo ""
+
+        if [ -f "$DEPLOY_SCRIPT" ]; then
+            bash "$DEPLOY_SCRIPT"
+            if [ $? -ne 0 ]; then
+                echo_error "自动部署失败，请手动安装 Ansible"
+                echo_info "CentOS 7: yum install -y epel-release && yum install -y ansible"
+                echo_info "Kylin V10: pip3 install ansible"
+                exit 1
+            fi
+        else
+            echo_error "未安装 Ansible，且找不到离线部署脚本 ($DEPLOY_SCRIPT)"
+            echo_info "请先在有网络的机器上运行: bash offline-pkgs/download.sh all"
+            echo_info "或手动安装: yum install -y epel-release && yum install -y ansible"
+            exit 1
+        fi
     fi
-    echo_info "✓ Ansible已安装"
+
+    echo_info "✓ Ansible已安装: $(ansible --version 2>/dev/null | head -1)"
     echo ""
 }
 
@@ -74,10 +93,23 @@ edit_inventory() {
     echo_blue "编辑节点清单..."
     if [ ! -f "$INVENTORY_FILE" ]; then
         echo_warn "节点清单不存在，将创建默认配置"
-        cp "$INVENTORY_FILE.example" "$INVENTORY_FILE" 2>/dev/null || {
-            echo_error "无法创建节点清单"
-            return 1
-        }
+        cat > "$INVENTORY_FILE" << 'YAMLEOF'
+---
+all:
+  children:
+    qfusion_masters:
+      hosts:
+        master1:
+          ansible_host: 10.10.156.87
+          ansible_user: root
+    qfusion_workers:
+      hosts: {}
+    qfusion_cluster:
+      children:
+        qfusion_masters:
+        qfusion_workers:
+YAMLEOF
+        echo_info "已创建默认节点清单模板"
     fi
 
     local editor="${EDITOR:-vi}"
@@ -91,8 +123,26 @@ show_nodes() {
     echo ""
     echo_blue "当前节点列表:"
     show_separator
-    grep -A 20 'qfusion_masters:' "$INVENTORY_FILE" | grep -E '^\s+.*:' | grep -v 'vars' | \
-        awk '{printf "  %-20s %-15s\n", $1, $2}' || echo "  (未配置节点)"
+    if [ -f "$INVENTORY_FILE" ]; then
+        ansible-inventory -i "$INVENTORY_FILE" --list 2>/dev/null | \
+            python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    for group in ['qfusion_masters', 'qfusion_workers']:
+        hosts = data.get(group, {}).get('hosts', {})
+        if hosts:
+            print(f'[{group}]')
+            for name, vars in hosts.items():
+                ip = vars.get('ansible_host', 'N/A')
+                user = vars.get('ansible_user', 'N/A')
+                print(f'  {name:20s} {ip:16s} user={user}')
+except:
+    print('  (无法解析节点清单，请检查YAML格式)')
+" 2>/dev/null || echo "  (未配置节点或python3不可用)"
+    else
+        echo "  (节点清单文件不存在)"
+    fi
     show_separator
     echo ""
 }
